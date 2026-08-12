@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional
 
 import httpx
@@ -17,6 +18,40 @@ PARSE_BOT_URL = (
     "https://api.parse.bot/scraper/9a5779d1-6006-4cff-8af0-2f31ec742428/search_products"
 )
 PARSE_BOT_API_KEY = os.getenv("PARSE_BOT_API_KEY", "pmx_20f1381acba5ef3610a782c7fc0d057c")
+
+
+def parse_price(value: object) -> float | None:
+    """Extract a numeric price from scraper or form values."""
+    match = re.search(r"\d+(?:,\d{3})*(?:\.\d{1,2})?", str(value))
+    return float(match.group(0).replace(",", "")) if match else None
+
+
+def build_local_verdict(product: str, customer_price: str, market_products: list[dict]) -> str:
+    market_prices = [
+        price
+        for item in market_products
+        if (price := parse_price(item.get("price") or item.get("current_price"))) is not None
+    ]
+    customer_value = parse_price(customer_price)
+    if not market_prices or customer_value is None:
+        return (
+            f"Market data for '{product}' is available, but I could not compare the prices reliably.\n"
+            f"Customer price provided: {customer_price}."
+        )
+
+    low, high = min(market_prices), max(market_prices)
+    average = sum(market_prices) / len(market_prices)
+    if customer_value < low:
+        verdict = "below market"
+    elif customer_value > high:
+        verdict = "above market"
+    else:
+        verdict = "competitive"
+    return (
+        f"Local price check for '{product}': the customer price is {verdict}.\n"
+        f"Market range: ${low:.2f}-$" f"{high:.2f} (average ${average:.2f}).\n"
+        f"Customer price: ${customer_value:.2f}."
+    )
 
 
 async def fetch_market_prices(keyword: str, zipcode: str, count: int = 5) -> list[dict]:
@@ -101,12 +136,7 @@ async def verify_price(payload: PriceRequest):
         market_summary = "No market listings found."
 
     if not os.getenv("ANTHROPIC_API_KEY") or Anthropic is None:
-        reply = (
-            f"Demo mode — market data for '{payload.product}' (zip {payload.zipcode}):\n"
-            f"{market_summary}\n\n"
-            f"Customer price provided: {payload.customer_price}. "
-            "Set ANTHROPIC_API_KEY to get an AI-powered price verdict."
-        )
+        reply = build_local_verdict(payload.product, payload.customer_price, market_products)
         return {"reply": reply, "mode": "demo", "market_products": market_products}
 
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
