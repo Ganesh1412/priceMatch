@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Price Match Assistant</title>
+    <link rel="stylesheet" href="static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="card">
+        <div class="hero">
+          <div>
+            <p class="eyebrow">Interactive customer pricing</p>
+            <h1>Price Match Assistant</h1>
+            <p class="subtitle">Ask about a product and price, and I’ll compare it against market data instantly.</p>
+          </div>
+          <div class="chip">Live Market Check</div>
+        </div>
+
+        <div id="chat" class="chat" aria-live="polite">
+          <div class="message bot">
+            Hi! Tell me the product and the price you want me to verify.
+          </div>
+        </div>
+
+        <div class="suggestions">
+          <button class="suggestion" data-product="wireless earbuds" data-price="29.99">Wireless earbuds @ $29.99</button>
+          <button class="suggestion" data-product="airpods" data-price="159.99">AirPods @ $159.99</button>
+          <button class="suggestion" data-product="smartwatch" data-price="199.99">Smartwatch @ $199.99</button>
+        </div>
+
+        <form id="price-form" class="composer">
+          <textarea id="prompt" name="prompt" rows="2" placeholder="Example: Verify the price for wireless earbuds at $29.99"></textarea>
+          <input id="product" name="product" placeholder="Product name" />
+          <input id="customer-price" name="customer_price" placeholder="Price" />
+          <input id="zipcode" name="zipcode" value="10001" />
+          <button type="submit">Verify</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="static/app.js"></script>
+  </body>
+</html>
