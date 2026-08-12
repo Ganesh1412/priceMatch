@@ -4,6 +4,7 @@ const suggestions = document.querySelectorAll('.suggestion');
 const promptInput = document.getElementById('prompt');
 const productInput = document.getElementById('product');
 const priceInput = document.getElementById('customer-price');
+const API_BASE_URL = 'https://pricematch-i4ccvq.fly.dev';
 
 function addMessage(text, type = 'bot') {
   const div = document.createElement('div');
@@ -37,7 +38,7 @@ form.addEventListener('submit', async (event) => {
   addMessage('Checking the price now...', 'bot');
 
   try {
-    const response = await fetch('/api/verify-price', {
+    const response = await fetch(`${API_BASE_URL}/api/verify-price`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
