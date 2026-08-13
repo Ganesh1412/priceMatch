@@ -21,6 +21,7 @@ const limitationsFootnote = document.getElementById('limitations-footnote');
 const disambiguationPanel = document.getElementById('disambiguation-panel');
 const disambiguationBadge = document.getElementById('disambiguation-badge');
 const disambiguationText = document.getElementById('disambiguation-text');
+const tiersList = document.getElementById('tiers-list');
 const candidatesList = document.getElementById('candidates-list');
 
 let lastPayload = null;
@@ -93,9 +94,29 @@ function renderDisambiguation(disambiguation) {
   disambiguationBadge.textContent = disambiguation.confidence;
   disambiguationText.textContent = disambiguation.verdict_text;
 
+  tiersList.innerHTML = '';
+  const tiers = disambiguation.tiers || [];
+  if (disambiguation.status === 'tier_ambiguous' && tiers.length) {
+    tiersList.hidden = false;
+    tiers.forEach((tier) => {
+      const li = document.createElement('li');
+      li.className = 'tier-item';
+      li.innerHTML = `
+        <div class="tier-header">
+          <span class="tier-label">${tier.label}</span>
+          <span class="tier-range">${formatMoney(tier.low)} – ${formatMoney(tier.high)}</span>
+        </div>
+        <span class="tier-examples">${tier.examples.join(', ')}</span>
+      `;
+      tiersList.appendChild(li);
+    });
+  } else {
+    tiersList.hidden = true;
+  }
+
   candidatesList.innerHTML = '';
   const candidates = disambiguation.candidates || [];
-  if (disambiguation.status === 'ambiguous' && candidates.length) {
+  if ((disambiguation.status === 'ambiguous' || disambiguation.status === 'tier_ambiguous') && candidates.length) {
     candidatesList.hidden = false;
     candidates.forEach((candidate) => {
       const li = document.createElement('li');

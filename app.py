@@ -175,6 +175,48 @@ def build_verdict_data(product: str, customer_price: str, market_products: list[
 
 PRICE_PROXIMITY_WINDOW = 40.0
 
+# Recognizable brand/product-line tokens; product names lacking any of these
+# are treated as "generic" for the tier-ambiguous check below.
+BRAND_TOKENS = {
+    "apple", "airpods", "garmin", "fitbit", "samsung", "sony", "google", "pixel",
+    "microsoft", "amazon", "lg", "bose", "jbl", "beats", "nike", "adidas", "dell",
+    "hp", "lenovo", "asus", "acer", "canon", "nikon", "whirlpool", "kitchenaid",
+    "dyson", "ninja", "keurig", "casio", "seiko", "timex", "oneplus", "xiaomi",
+    "huawei", "motorola", "nokia", "logitech", "razer",
+}
+
+TIER_LABELS = ["Budget", "Mid-range", "Premium"]
+
+# Wide-spread threshold for generic-name tier detection.
+TIER_PRICE_RATIO_THRESHOLD = 3.0
+
+
+def has_brand_token(product: str) -> bool:
+    """Return True if the product name contains a recognizable brand/product-line keyword."""
+    tokens = set(re.findall(r"[a-z0-9]+", product.lower()))
+    return bool(tokens & BRAND_TOKENS)
+
+
+def build_price_tiers(usable: list[dict]) -> list[dict]:
+    """Bucket listings into low/mid/high terciles by price rank (not fixed dollar amounts)."""
+    sorted_listings = sorted(usable, key=lambda item: item["price"])
+    n = len(sorted_listings)
+    b1, b2 = round(n / 3), round(2 * n / 3)
+    groups = [sorted_listings[:b1], sorted_listings[b1:b2], sorted_listings[b2:]]
+    tiers = []
+    for label, group in zip(TIER_LABELS, groups):
+        if not group:
+            continue
+        tiers.append(
+            {
+                "label": label,
+                "low": group[0]["price"],
+                "high": group[-1]["price"],
+                "examples": [item["name"] for item in group],
+            }
+        )
+    return tiers
+
 
 def build_disambiguation(
     product: str,
@@ -245,6 +287,24 @@ def build_disambiguation(
             "matched_listing": matched,
             "candidates": [],
             "verdict_text": verdict_text_for(matched),
+        }
+
+    prices = [u["price"] for u in usable]
+    wide_spread = (
+        len(usable) >= 3 and min(prices) > 0 and (max(prices) / min(prices)) > TIER_PRICE_RATIO_THRESHOLD
+    )
+
+    if not has_brand_token(product) and wide_spread:
+        return {
+            "status": "tier_ambiguous",
+            "confidence": "Estimated",
+            "matched_listing": None,
+            "candidates": usable,
+            "tiers": build_price_tiers(usable),
+            "verdict_text": (
+                f"'{product}' doesn't name a specific brand or model, and prices for it range widely — "
+                "pick the tier (or exact listing) that matches what you have so we can confirm the price."
+            ),
         }
 
     return {
@@ -347,6 +407,11 @@ async def verify_price(payload: PriceRequest):
     disambiguation = build_disambiguation(
         payload.product, payload.customer_price, market_products, payload.selected_listing_index
     )
+    if disambiguation.get("status") == "tier_ambiguous":
+        verdict_data["limitations"] = [
+            *verdict_data["limitations"],
+            "Tier was picked by category price range, not by exact brand/model match.",
+        ]
 
     if not os.getenv("ANTHROPIC_API_KEY") or Anthropic is None:
         reply = build_local_verdict(payload.product, payload.customer_price, market_products)

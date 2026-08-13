@@ -185,7 +185,8 @@ body {
   color: #7ee2a0;
 }
 
-.disambiguation-panel[data-status="ambiguous"] .disambiguation-badge {
+.disambiguation-panel[data-status="ambiguous"] .disambiguation-badge,
+.disambiguation-panel[data-status="tier_ambiguous"] .disambiguation-badge {
   background: rgba(255, 149, 0, 0.18);
   border-color: rgba(255, 149, 0, 0.4);
   color: #ffbe6e;
@@ -232,6 +233,40 @@ body {
 
 .candidate-price { font-weight: 700; }
 .candidate-source { color: #c8d7f4; }
+
+.tiers-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tier-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 149, 0, 0.08);
+  border: 1px solid rgba(255, 149, 0, 0.25);
+  font-size: 0.85rem;
+}
+
+.tier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+}
+
+.tier-range { color: #ffbe6e; }
+
+.tier-examples {
+  color: #c8d7f4;
+  font-size: 0.8rem;
+}
 
 @media (max-width: 700px) {
   .candidate-item {
