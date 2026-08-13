@@ -6,6 +6,73 @@ const productInput = document.getElementById('product');
 const priceInput = document.getElementById('customer-price');
 const API_BASE_URL = 'https://pricematch-i4ccvq.fly.dev';
 
+const verdictPanel = document.getElementById('verdict-panel');
+const verdictBadge = document.getElementById('verdict-badge');
+const confidenceLine = document.getElementById('confidence-line');
+const verdictExplanation = document.getElementById('verdict-explanation');
+const cmpCustomerPrice = document.getElementById('cmp-customer-price');
+const cmpMarketAverage = document.getElementById('cmp-market-average');
+const cmpRange = document.getElementById('cmp-range');
+const cmpLowest = document.getElementById('cmp-lowest');
+const cmpDifference = document.getElementById('cmp-difference');
+const listingsList = document.getElementById('listings-list');
+const limitationsFootnote = document.getElementById('limitations-footnote');
+
+function formatMoney(value) {
+  return value === null || value === undefined ? '—' : `$${Number(value).toFixed(2)}`;
+}
+
+function renderVerdict(data) {
+  if (!data || !data.verdict) {
+    verdictPanel.hidden = true;
+    return;
+  }
+
+  verdictPanel.hidden = false;
+  verdictPanel.dataset.code = data.verdict.code;
+  verdictBadge.textContent = data.verdict.label;
+  verdictExplanation.textContent = data.verdict.explanation;
+
+  const confidence = data.confidence || {};
+  const matchLabel = {
+    confirmed: 'confirmed match',
+    likely: 'likely match',
+    keyword_match: 'keyword match only',
+    unknown: 'match unknown',
+  }[confidence.productMatch] || 'match unknown';
+  confidenceLine.textContent = `Confidence: ${confidence.level || 'low'} · Product match: ${matchLabel}`;
+
+  const cmp = data.comparison || {};
+  cmpCustomerPrice.textContent = formatMoney(cmp.customerPrice);
+  cmpMarketAverage.textContent = formatMoney(cmp.marketAverage);
+  const range = cmp.comparableRange || {};
+  cmpRange.textContent =
+    range.low !== null && range.low !== undefined
+      ? `${formatMoney(range.low)} – ${formatMoney(range.high)}`
+      : '—';
+  const lowest = cmp.lowestComparable || {};
+  cmpLowest.textContent = formatMoney(lowest.price);
+  cmpDifference.textContent =
+    lowest.difference !== null && lowest.difference !== undefined
+      ? `${lowest.difference >= 0 ? '+' : ''}${formatMoney(lowest.difference)} (${lowest.percentageDifference}%)`
+      : '—';
+
+  listingsList.innerHTML = '';
+  (data.listings || []).forEach((listing) => {
+    const li = document.createElement('li');
+    li.className = 'listing-item';
+    li.innerHTML = `
+      <span class="listing-name">${listing.name}</span>
+      <span class="listing-price">${formatMoney(listing.price)}</span>
+      <span class="listing-source">${listing.source}</span>
+      <span class="listing-match">keyword match</span>
+    `;
+    listingsList.appendChild(li);
+  });
+
+  limitationsFootnote.textContent = (data.limitations || []).join(' ');
+}
+
 function addMessage(text, type = 'bot') {
   const div = document.createElement('div');
   div.className = `message ${type}`;
@@ -36,6 +103,7 @@ form.addEventListener('submit', async (event) => {
 
   addMessage(rawPrompt || `Product: ${payload.product} | Price: ${payload.customer_price}`, 'user');
   addMessage('Checking the price now...', 'bot');
+  verdictPanel.hidden = true;
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/verify-price`, {
@@ -51,9 +119,11 @@ form.addEventListener('submit', async (event) => {
 
     chat.removeChild(chat.lastElementChild);
     addMessage(data.reply, 'bot');
+    renderVerdict(data);
   } catch (error) {
     chat.removeChild(chat.lastElementChild);
     addMessage(`Could not verify the price: ${error.message}`, 'bot');
+    verdictPanel.hidden = true;
   }
 });
 

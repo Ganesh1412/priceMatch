@@ -54,6 +54,112 @@ def build_local_verdict(product: str, customer_price: str, market_products: list
     )
 
 
+LIMITATIONS = [
+    "Listings are keyword matches, not confirmed identical products.",
+    "Shipping, tax, and promotions are not normalized across listings.",
+]
+
+
+def build_verdict_data(product: str, customer_price: str, market_products: list[dict]) -> dict:
+    """Build the structured verdict/comparison/confidence/listings payload."""
+    listings = []
+    usable_prices = []
+    for item in market_products[:5]:
+        name = item.get("title") or item.get("name") or "Unknown"
+        source = item.get("store") or item.get("retailer") or item.get("brand") or "Unknown source"
+        price = parse_price(item.get("price") or item.get("current_price"))
+        listings.append(
+            {
+                "name": name,
+                "price": price,
+                "source": source,
+                "matchStatus": "keyword_match",
+            }
+        )
+        if price is not None:
+            usable_prices.append(price)
+
+    customer_value = parse_price(customer_price)
+
+    if len(usable_prices) < 2:
+        return {
+            "verdict": {
+                "code": "insufficient_evidence",
+                "label": "Not enough evidence",
+                "explanation": (
+                    f"We found fewer than two comparable listings for '{product}', "
+                    "so we can't confidently verify this price."
+                ),
+            },
+            "comparison": {
+                "customerPrice": customer_value,
+                "marketAverage": None,
+                "comparableRange": {"low": None, "high": None},
+                "lowestComparable": {"price": None, "difference": None, "percentageDifference": None},
+            },
+            "confidence": {
+                "level": "low",
+                "productMatch": "unknown",
+                "reasons": ["Fewer than two usable comparable listings were found."],
+            },
+            "listings": listings,
+            "limitations": LIMITATIONS,
+        }
+
+    low, high = min(usable_prices), max(usable_prices)
+    average = sum(usable_prices) / len(usable_prices)
+    lowest_price = low
+    difference = None
+    percentage_difference = None
+    if customer_value is not None:
+        difference = round(customer_value - lowest_price, 2)
+        percentage_difference = round((difference / lowest_price) * 100, 2) if lowest_price else None
+
+    if customer_value is None:
+        code, label, explanation = (
+            "insufficient_evidence",
+            "Not enough evidence",
+            "We couldn't read a valid customer price to compare against the market.",
+        )
+        confidence_level = "low"
+    else:
+        pct_from_average = (customer_value - average) / average if average else 0
+        if abs(pct_from_average) <= 0.10:
+            code, label = "competitive", "Competitive"
+            explanation = f"The customer's price is within 10% of the market average of ${average:.2f}."
+        elif pct_from_average < -0.10:
+            code, label = "lower", "Below market"
+            explanation = f"The customer's price is more than 10% below the market average of ${average:.2f}."
+        else:
+            code, label = "higher", "Above market"
+            explanation = f"The customer's price is more than 10% above the market average of ${average:.2f}."
+        confidence_level = "moderate"
+
+    return {
+        "verdict": {"code": code, "label": label, "explanation": explanation},
+        "comparison": {
+            "customerPrice": customer_value,
+            "marketAverage": round(average, 2),
+            "comparableRange": {"low": round(low, 2), "high": round(high, 2)},
+            "lowestComparable": {
+                "price": round(lowest_price, 2),
+                "difference": difference,
+                "percentageDifference": percentage_difference,
+            },
+        },
+        "confidence": {
+            "level": confidence_level,
+            "productMatch": "keyword_match",
+            "reasons": [
+                "Listings matched by product keyword search, not by confirmed SKU/model.",
+                f"{len(usable_prices)} usable comparable listing(s) found.",
+            ],
+        },
+        "listings": listings,
+        "limitations": LIMITATIONS,
+    }
+
+
 async def fetch_market_prices(keyword: str, zipcode: str, count: int = 5) -> list[dict]:
     """Fetch product listings from the Parse Bot scraper API."""
     params = {
@@ -135,9 +241,11 @@ async def verify_price(payload: PriceRequest):
     else:
         market_summary = "No market listings found."
 
+    verdict_data = build_verdict_data(payload.product, payload.customer_price, market_products)
+
     if not os.getenv("ANTHROPIC_API_KEY") or Anthropic is None:
         reply = build_local_verdict(payload.product, payload.customer_price, market_products)
-        return {"reply": reply, "mode": "demo", "market_products": market_products}
+        return {"reply": reply, "mode": "demo", "market_products": market_products, **verdict_data}
 
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = (
@@ -161,4 +269,4 @@ async def verify_price(payload: PriceRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Anthropic request failed: {exc}") from exc
 
-    return {"reply": text, "mode": "anthropic", "market_products": market_products}
+    return {"reply": text, "mode": "anthropic", "market_products": market_products, **verdict_data}
