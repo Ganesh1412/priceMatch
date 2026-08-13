@@ -24,6 +24,61 @@
           </div>
         </div>
 
+        <section id="agent-pipeline" class="agent-pipeline" aria-live="polite" hidden>
+          <div class="pipeline-heading">
+            <span>Live agent handoff</span>
+            <span id="pipeline-status" class="pipeline-status">Starting</span>
+          </div>
+          <div id="agent-stages" class="agent-stages"></div>
+        </section>
+
+        <div id="verdict-panel" class="verdict-panel" hidden aria-live="polite">
+          <div class="verdict-header">
+            <span id="verdict-badge" class="verdict-badge">Verdict</span>
+            <span id="confidence-line" class="confidence-line"></span>
+          </div>
+          <p id="verdict-explanation" class="verdict-explanation"></p>
+
+          <div id="disambiguation-panel" class="disambiguation-panel" hidden>
+            <div class="disambiguation-header">
+              <span id="disambiguation-badge" class="disambiguation-badge">Confidence</span>
+            </div>
+            <p id="disambiguation-text" class="disambiguation-text"></p>
+            <ul id="tiers-list" class="tiers-list" hidden></ul>
+            <ul id="candidates-list" class="candidates-list" hidden></ul>
+          </div>
+
+          <div class="comparison-grid">
+            <div class="comparison-item">
+              <span class="comparison-label">Your price</span>
+              <span id="cmp-customer-price" class="comparison-value">—</span>
+            </div>
+            <div class="comparison-item">
+              <span class="comparison-label">Market average</span>
+              <span id="cmp-market-average" class="comparison-value">—</span>
+            </div>
+            <div class="comparison-item">
+              <span class="comparison-label">Observed range</span>
+              <span id="cmp-range" class="comparison-value">—</span>
+            </div>
+            <div class="comparison-item">
+              <span class="comparison-label">Lowest comparable</span>
+              <span id="cmp-lowest" class="comparison-value">—</span>
+            </div>
+            <div class="comparison-item">
+              <span class="comparison-label">Difference</span>
+              <span id="cmp-difference" class="comparison-value">—</span>
+            </div>
+          </div>
+
+          <div class="listings-section">
+            <h3>Market listings</h3>
+            <ul id="listings-list" class="listings-list"></ul>
+          </div>
+
+          <p id="limitations-footnote" class="limitations-footnote"></p>
+        </div>
+
         <div class="suggestions">
           <button class="suggestion" data-product="wireless earbuds" data-price="29.99">Wireless earbuds @ $29.99</button>
           <button class="suggestion" data-product="airpods" data-price="159.99">AirPods @ $159.99</button>

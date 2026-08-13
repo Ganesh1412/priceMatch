@@ -34,8 +34,8 @@ function formatMoney(value) {
 }
 
 function renderVerdict(data) {
-  if (!data || !data.verdict) {
-    verdictPanel.hidden = true;
+  if (!data || !data.verdict || !verdictPanel || !verdictBadge || !verdictExplanation) {
+    if (verdictPanel) verdictPanel.hidden = true;
     return;
   }
 
@@ -87,8 +87,8 @@ function renderVerdict(data) {
 }
 
 function renderDisambiguation(disambiguation) {
-  if (!disambiguation) {
-    disambiguationPanel.hidden = true;
+  if (!disambiguation || !disambiguationPanel || !disambiguationBadge || !disambiguationText) {
+    if (disambiguationPanel) disambiguationPanel.hidden = true;
     return;
   }
 
@@ -154,12 +154,13 @@ function addMessage(text, type = 'bot') {
 }
 
 function resetPipeline() {
-  agentPipeline.hidden = false;
-  agentStages.innerHTML = '';
-  pipelineStatus.textContent = 'Running';
+  if (agentPipeline) agentPipeline.hidden = false;
+  if (agentStages) agentStages.innerHTML = '';
+  if (pipelineStatus) pipelineStatus.textContent = 'Running';
 }
 
 function renderAgentStage(stage) {
+  if (!agentStages) return;
   const card = document.createElement('article');
   card.className = 'agent-stage';
 
@@ -238,14 +239,18 @@ async function submitPayload(payload) {
     if (!data) throw new Error('The pipeline ended without a final answer.');
 
     lastPayload = { product: payload.product, customer_price: payload.customer_price, zipcode: payload.zipcode };
-    chat.removeChild(chat.lastElementChild);
+    if (chat && chat.lastElementChild) {
+      chat.removeChild(chat.lastElementChild);
+    }
     addMessage(data.reply, 'bot');
     renderVerdict(data);
   } catch (error) {
-    chat.removeChild(chat.lastElementChild);
+    if (chat && chat.lastElementChild) {
+      chat.removeChild(chat.lastElementChild);
+    }
     addMessage(`Could not verify the price: ${error.message}`, 'bot');
-    verdictPanel.hidden = true;
-    disambiguationPanel.hidden = true;
+    if (verdictPanel) verdictPanel.hidden = true;
+    if (disambiguationPanel) disambiguationPanel.hidden = true;
   }
 }
 
