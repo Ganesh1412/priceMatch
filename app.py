@@ -54,6 +54,19 @@ def build_local_verdict(product: str, customer_price: str, market_products: list
     )
 
 
+def relevant_market_products(product: str, market_products: list[dict]) -> list[dict]:
+    """Filter out scraper fallback listings that don't relate to the requested product."""
+    tokens = {t for t in re.findall(r"[a-z0-9]+", product.lower()) if len(t) >= 3}
+    if not tokens:
+        return market_products
+    relevant = []
+    for item in market_products:
+        name = str(item.get("title") or item.get("name") or "").lower()
+        if any(token in name for token in tokens):
+            relevant.append(item)
+    return relevant
+
+
 LIMITATIONS = [
     "Listings are keyword matches, not confirmed identical products.",
     "Shipping, tax, and promotions are not normalized across listings.",
@@ -64,7 +77,7 @@ def build_verdict_data(product: str, customer_price: str, market_products: list[
     """Build the structured verdict/comparison/confidence/listings payload."""
     listings = []
     usable_prices = []
-    for item in market_products[:5]:
+    for item in relevant_market_products(product, market_products)[:5]:
         name = item.get("title") or item.get("name") or "Unknown"
         source = item.get("store") or item.get("retailer") or item.get("brand") or "Unknown source"
         price = parse_price(item.get("price") or item.get("current_price"))
@@ -160,6 +173,92 @@ def build_verdict_data(product: str, customer_price: str, market_products: list[
     }
 
 
+PRICE_PROXIMITY_WINDOW = 40.0
+
+
+def build_disambiguation(
+    product: str,
+    customer_price: str,
+    market_products: list[dict],
+    selected_listing_index: Optional[int],
+) -> dict:
+    """Build the disambiguation object: confirmed/estimated/ambiguous/inconclusive verdict."""
+    usable: list[dict] = []
+    for item in relevant_market_products(product, market_products):
+        name = item.get("title") or item.get("name") or "Unknown"
+        source = item.get("store") or item.get("retailer") or item.get("brand") or "Unknown source"
+        price = parse_price(item.get("price") or item.get("current_price"))
+        if price is not None:
+            usable.append({"name": name, "price": round(price, 2), "source": source})
+    for i, listing in enumerate(usable):
+        listing["index"] = i
+
+    customer_value = parse_price(customer_price)
+
+    if not usable:
+        return {
+            "status": "inconclusive",
+            "confidence": "Inconclusive",
+            "matched_listing": None,
+            "candidates": [],
+            "verdict_text": (
+                f"We couldn't find any usable market listings for '{product}', so we can't verify this price."
+            ),
+        }
+
+    def verdict_text_for(matched: dict) -> str:
+        if customer_value is None:
+            return (
+                f"We found a matching listing for '{product}' at ${matched['price']:.2f}, "
+                "but couldn't read a valid customer price to compare."
+            )
+        delta = round(customer_value - matched["price"], 2)
+        if abs(delta) < 0.01:
+            return f"Your price of ${customer_value:.2f} matches {matched['name']} ({matched['source']}) exactly."
+        direction = "higher" if delta > 0 else "lower"
+        return (
+            f"Your price of ${customer_value:.2f} is ${abs(delta):.2f} {direction} than "
+            f"{matched['name']} ({matched['source']}) at ${matched['price']:.2f}."
+        )
+
+    if selected_listing_index is not None and 0 <= selected_listing_index < len(usable):
+        matched = usable[selected_listing_index]
+        return {
+            "status": "confirmed",
+            "confidence": "Confirmed",
+            "matched_listing": matched,
+            "candidates": [],
+            "verdict_text": verdict_text_for(matched),
+        }
+
+    within_window = (
+        [u for u in usable if abs(u["price"] - customer_value) <= PRICE_PROXIMITY_WINDOW]
+        if customer_value is not None
+        else []
+    )
+
+    if len(within_window) == 1:
+        matched = within_window[0]
+        return {
+            "status": "confirmed",
+            "confidence": "Confirmed",
+            "matched_listing": matched,
+            "candidates": [],
+            "verdict_text": verdict_text_for(matched),
+        }
+
+    return {
+        "status": "ambiguous",
+        "confidence": "Estimated",
+        "matched_listing": None,
+        "candidates": usable,
+        "verdict_text": (
+            f"We found multiple possible listings for '{product}' — pick the one that matches "
+            "what you have so we can confirm the price."
+        ),
+    }
+
+
 async def fetch_market_prices(keyword: str, zipcode: str, count: int = 5) -> list[dict]:
     """Fetch product listings from the Parse Bot scraper API."""
     params = {
@@ -196,6 +295,7 @@ class PriceRequest(BaseModel):
     product: str
     customer_price: str
     zipcode: str = "10001"
+    selected_listing_index: Optional[int] = None
 
 
 @app.get("/", response_class=FileResponse)
@@ -242,10 +342,19 @@ async def verify_price(payload: PriceRequest):
         market_summary = "No market listings found."
 
     verdict_data = build_verdict_data(payload.product, payload.customer_price, market_products)
+    disambiguation = build_disambiguation(
+        payload.product, payload.customer_price, market_products, payload.selected_listing_index
+    )
 
     if not os.getenv("ANTHROPIC_API_KEY") or Anthropic is None:
         reply = build_local_verdict(payload.product, payload.customer_price, market_products)
-        return {"reply": reply, "mode": "demo", "market_products": market_products, **verdict_data}
+        return {
+            "reply": reply,
+            "mode": "demo",
+            "market_products": market_products,
+            **verdict_data,
+            "disambiguation": disambiguation,
+        }
 
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = (
@@ -269,4 +378,10 @@ async def verify_price(payload: PriceRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Anthropic request failed: {exc}") from exc
 
-    return {"reply": text, "mode": "anthropic", "market_products": market_products, **verdict_data}
+    return {
+        "reply": text,
+        "mode": "anthropic",
+        "market_products": market_products,
+        **verdict_data,
+        "disambiguation": disambiguation,
+    }

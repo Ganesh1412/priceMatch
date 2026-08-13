@@ -18,6 +18,13 @@ const cmpDifference = document.getElementById('cmp-difference');
 const listingsList = document.getElementById('listings-list');
 const limitationsFootnote = document.getElementById('limitations-footnote');
 
+const disambiguationPanel = document.getElementById('disambiguation-panel');
+const disambiguationBadge = document.getElementById('disambiguation-badge');
+const disambiguationText = document.getElementById('disambiguation-text');
+const candidatesList = document.getElementById('candidates-list');
+
+let lastPayload = null;
+
 function formatMoney(value) {
   return value === null || value === undefined ? '—' : `$${Number(value).toFixed(2)}`;
 }
@@ -71,6 +78,47 @@ function renderVerdict(data) {
   });
 
   limitationsFootnote.textContent = (data.limitations || []).join(' ');
+
+  renderDisambiguation(data.disambiguation);
+}
+
+function renderDisambiguation(disambiguation) {
+  if (!disambiguation) {
+    disambiguationPanel.hidden = true;
+    return;
+  }
+
+  disambiguationPanel.hidden = false;
+  disambiguationPanel.dataset.status = disambiguation.status;
+  disambiguationBadge.textContent = disambiguation.confidence;
+  disambiguationText.textContent = disambiguation.verdict_text;
+
+  candidatesList.innerHTML = '';
+  const candidates = disambiguation.candidates || [];
+  if (disambiguation.status === 'ambiguous' && candidates.length) {
+    candidatesList.hidden = false;
+    candidates.forEach((candidate) => {
+      const li = document.createElement('li');
+      li.className = 'candidate-item';
+      li.innerHTML = `
+        <span class="candidate-name">${candidate.name}</span>
+        <span class="candidate-price">${formatMoney(candidate.price)}</span>
+        <span class="candidate-source">${candidate.source}</span>
+      `;
+      li.addEventListener('click', () => selectCandidate(candidate.index));
+      candidatesList.appendChild(li);
+    });
+  } else {
+    candidatesList.hidden = true;
+  }
+}
+
+async function selectCandidate(index) {
+  if (!lastPayload) return;
+  const payload = { ...lastPayload, selected_listing_index: index };
+  addMessage(`I have this one.`, 'user');
+  addMessage('Confirming against that listing...', 'bot');
+  await submitPayload(payload);
 }
 
 function addMessage(text, type = 'bot') {
@@ -92,19 +140,7 @@ function extractFieldsFromPrompt(text) {
   };
 }
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const formData = new FormData(form);
-  const rawPrompt = (formData.get('prompt') || '').toString().trim();
-  const parsed = extractFieldsFromPrompt(rawPrompt);
-  const payload = Object.fromEntries(formData.entries());
-  payload.product = parsed.product || payload.product || 'unknown product';
-  payload.customer_price = parsed.customer_price || payload.customer_price || 'unknown price';
-
-  addMessage(rawPrompt || `Product: ${payload.product} | Price: ${payload.customer_price}`, 'user');
-  addMessage('Checking the price now...', 'bot');
-  verdictPanel.hidden = true;
-
+async function submitPayload(payload) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/verify-price`, {
       method: 'POST',
@@ -117,6 +153,7 @@ form.addEventListener('submit', async (event) => {
       throw new Error(data.detail || 'Request failed');
     }
 
+    lastPayload = { product: payload.product, customer_price: payload.customer_price, zipcode: payload.zipcode };
     chat.removeChild(chat.lastElementChild);
     addMessage(data.reply, 'bot');
     renderVerdict(data);
@@ -124,7 +161,26 @@ form.addEventListener('submit', async (event) => {
     chat.removeChild(chat.lastElementChild);
     addMessage(`Could not verify the price: ${error.message}`, 'bot');
     verdictPanel.hidden = true;
+    disambiguationPanel.hidden = true;
   }
+}
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const formData = new FormData(form);
+  const rawPrompt = (formData.get('prompt') || '').toString().trim();
+  const parsed = extractFieldsFromPrompt(rawPrompt);
+  const payload = Object.fromEntries(formData.entries());
+  payload.product = parsed.product || payload.product || 'unknown product';
+  payload.customer_price = parsed.customer_price || payload.customer_price || 'unknown price';
+  delete payload.selected_listing_index;
+
+  addMessage(rawPrompt || `Product: ${payload.product} | Price: ${payload.customer_price}`, 'user');
+  addMessage('Checking the price now...', 'bot');
+  verdictPanel.hidden = true;
+  disambiguationPanel.hidden = true;
+
+  await submitPayload(payload);
 });
 
 suggestions.forEach((button) => {
