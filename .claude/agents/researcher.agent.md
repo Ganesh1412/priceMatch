@@ -26,7 +26,8 @@ Workflow:
 3. Retrieve source data
    - Use Bash/curl to call the Target API and collect the returned product results.
    - When calling the Target API, send the API key using the x-api-key header.
-   - Example header: x-api-key: pmx_20f1381acba5ef3610a782c7fc0d057c
+   - Read the key from the PARSE_BOT_API_KEY environment variable; never hardcode it.
+   - Example header: x-api-key: $PARSE_BOT_API_KEY
    - Use Bash/Python to export the Google Sheet as CSV when possible:
      https://docs.google.com/spreadsheets/d/18bRBjdIT8UQ51v7yyjalkegwgX4gSPRGt2xmtFfr9Og/export?format=csv&gid=1108055112
    - If CSV export is blocked, fall back to another available access method and continue with the best available data.

@@ -3,3 +3,10 @@ fly.toml
 __pycache__/
 .envrc
 .venv/
+.pytest_cache/
+*.pyc
+tests/
+requirements-dev.txt
+.claude/
+.github/
+README.md

@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - defensive fallback
 PARSE_BOT_URL = (
     "https://api.parse.bot/scraper/9a5779d1-6006-4cff-8af0-2f31ec742428/search_products"
 )
-PARSE_BOT_API_KEY = os.getenv("PARSE_BOT_API_KEY", "pmx_20f1381acba5ef3610a782c7fc0d057c")
+PARSE_BOT_API_KEY = os.getenv("PARSE_BOT_API_KEY")
 
 
 def parse_price(value: object) -> float | None:
@@ -261,6 +261,8 @@ def build_disambiguation(
 
 async def fetch_market_prices(keyword: str, zipcode: str, count: int = 5) -> list[dict]:
     """Fetch product listings from the Parse Bot scraper API."""
+    if not PARSE_BOT_API_KEY:
+        raise HTTPException(status_code=500, detail="PARSE_BOT_API_KEY is not configured.")
     params = {
         "zip": zipcode,
         "count": count,
