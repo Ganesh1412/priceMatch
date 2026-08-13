@@ -23,6 +23,9 @@ const disambiguationBadge = document.getElementById('disambiguation-badge');
 const disambiguationText = document.getElementById('disambiguation-text');
 const tiersList = document.getElementById('tiers-list');
 const candidatesList = document.getElementById('candidates-list');
+const agentPipeline = document.getElementById('agent-pipeline');
+const agentStages = document.getElementById('agent-stages');
+const pipelineStatus = document.getElementById('pipeline-status');
 
 let lastPayload = null;
 
@@ -150,6 +153,38 @@ function addMessage(text, type = 'bot') {
   chat.scrollTop = chat.scrollHeight;
 }
 
+function resetPipeline() {
+  agentPipeline.hidden = false;
+  agentStages.innerHTML = '';
+  pipelineStatus.textContent = 'Running';
+}
+
+function renderAgentStage(stage) {
+  const card = document.createElement('article');
+  card.className = 'agent-stage';
+
+  const header = document.createElement('div');
+  header.className = 'agent-stage-header';
+  const title = document.createElement('strong');
+  title.textContent = stage.title || stage.agent;
+  const badge = document.createElement('span');
+  badge.className = 'agent-stage-badge';
+  badge.textContent = 'Complete';
+  header.append(title, badge);
+
+  const summary = document.createElement('p');
+  summary.className = 'agent-stage-summary';
+  summary.textContent = stage.summary || 'No summary returned.';
+
+  const output = document.createElement('pre');
+  output.className = 'agent-stage-output';
+  output.textContent = JSON.stringify(stage, null, 2);
+
+  card.append(header, summary, output);
+  agentStages.appendChild(card);
+  chat.scrollTop = chat.scrollHeight;
+}
+
 function extractFieldsFromPrompt(text) {
   const lower = text.toLowerCase();
   const productMatch = text.match(/for\s+(.+?)(?:\s+at\s+|\s+for\s+\$|\s+price\s+of\s+|\s+at\s+\$)/i);
@@ -163,16 +198,44 @@ function extractFieldsFromPrompt(text) {
 
 async function submitPayload(payload) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/verify-price`, {
+    resetPipeline();
+    const response = await fetch(`${API_BASE_URL}/api/verify-price/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.detail || 'Request failed');
+      const error = await response.json();
+      throw new Error(error.detail || 'Request failed');
     }
+
+    if (!response.body) throw new Error('The live pipeline is unavailable.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let data = null;
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+        if (event.type === 'agent') {
+          renderAgentStage(event.stage);
+        } else if (event.type === 'complete') {
+          data = event.result;
+          pipelineStatus.textContent = 'Complete';
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Pipeline failed');
+        }
+      }
+      if (done) break;
+    }
+    if (!data) throw new Error('The pipeline ended without a final answer.');
 
     lastPayload = { product: payload.product, customer_price: payload.customer_price, zipcode: payload.zipcode };
     chat.removeChild(chat.lastElementChild);

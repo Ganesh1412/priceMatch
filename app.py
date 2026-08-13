@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from typing import Optional
@@ -5,7 +6,7 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -355,6 +356,58 @@ class PriceRequest(BaseModel):
     selected_listing_index: Optional[int] = None
 
 
+def build_researcher_output(payload: PriceRequest, market_products: list[dict]) -> dict:
+    """Return the evidence that is handed from the researcher to the designer."""
+    listings = [
+        {
+            "name": item.get("title") or item.get("name") or "Unknown",
+            "price": item.get("price") or item.get("current_price"),
+            "source": item.get("store") or item.get("retailer") or item.get("brand") or "Unknown source",
+        }
+        for item in market_products[:5]
+    ]
+    return {
+        "agent": "researcher",
+        "title": "Market Researcher",
+        "summary": f"Found {len(listings)} market listing(s) for '{payload.product}'.",
+        "input": {
+            "product": payload.product,
+            "customer_price": payload.customer_price,
+            "zipcode": payload.zipcode,
+        },
+        "listings": listings,
+    }
+
+
+def build_solution_designer_output(
+    payload: PriceRequest,
+    researcher_output: dict,
+    verdict_data: dict,
+    disambiguation: dict,
+) -> dict:
+    """Turn researcher evidence into the structured experience data."""
+    return {
+        "agent": "solution-designer",
+        "title": "Solution Designer",
+        "summary": verdict_data["verdict"]["explanation"],
+        "input": researcher_output,
+        "verdict": verdict_data["verdict"],
+        "comparison": verdict_data["comparison"],
+        "confidence": verdict_data["confidence"],
+        "disambiguation": disambiguation,
+    }
+
+
+def build_prototyper_output(payload: PriceRequest, designer_output: dict, market_products: list[dict]) -> dict:
+    """Format the designer's decision as the customer-facing assistant response."""
+    return {
+        "agent": "prototyper",
+        "title": "Customer Assistant",
+        "summary": build_local_verdict(payload.product, payload.customer_price, market_products),
+        "input": designer_output,
+    }
+
+
 @app.get("/", response_class=FileResponse)
 async def index():
     return FileResponse("templates/index.html")
@@ -404,3 +457,60 @@ async def verify_price(payload: PriceRequest):
         **verdict_data,
         "disambiguation": disambiguation,
     }
+
+
+async def pipeline_events(payload: PriceRequest):
+    """Yield each agent result in order so the UI can render the handoffs live."""
+    try:
+        market_products = await fetch_market_prices(payload.product.strip(), payload.zipcode)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Price scraper error: {exc.response.status_code}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch market prices: {exc}") from exc
+
+    researcher_output = build_researcher_output(payload, market_products)
+    yield {"type": "agent", "stage": researcher_output}
+
+    verdict_data = build_verdict_data(payload.product, payload.customer_price, market_products)
+    disambiguation = build_disambiguation(
+        payload.product, payload.customer_price, market_products, payload.selected_listing_index
+    )
+    if disambiguation.get("status") == "tier_ambiguous":
+        verdict_data["limitations"] = [
+            *verdict_data["limitations"],
+            "Tier was picked by category price range, not by exact brand/model match.",
+        ]
+    designer_output = build_solution_designer_output(
+        payload, researcher_output, verdict_data, disambiguation
+    )
+    yield {"type": "agent", "stage": designer_output}
+
+    prototyper_output = build_prototyper_output(payload, designer_output, market_products)
+    yield {"type": "agent", "stage": prototyper_output}
+    yield {
+        "type": "complete",
+        "result": {
+            "reply": prototyper_output["summary"],
+            "mode": "pipeline",
+            "market_products": market_products,
+            **verdict_data,
+            "disambiguation": disambiguation,
+        },
+    }
+
+
+@app.post("/api/verify-price/stream")
+async def verify_price_stream(payload: PriceRequest):
+    if not payload.product.strip():
+        raise HTTPException(status_code=400, detail="Product name is required.")
+    if not payload.customer_price.strip():
+        raise HTTPException(status_code=400, detail="Customer price is required.")
+
+    async def stream():
+        try:
+            async for event in pipeline_events(payload):
+                yield json.dumps(event) + "\n"
+        except HTTPException as exc:
+            yield json.dumps({"type": "error", "message": exc.detail}) + "\n"
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")

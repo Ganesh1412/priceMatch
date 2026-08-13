@@ -85,6 +85,68 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.agent-pipeline {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid rgba(142, 197, 255, 0.24);
+  border-radius: 16px;
+  background: rgba(2, 8, 23, 0.3);
+}
+
+.pipeline-heading,
+.agent-stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pipeline-heading {
+  margin-bottom: 10px;
+  color: #dce9ff;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pipeline-status,
+.agent-stage-badge {
+  color: #7ee2a0;
+  font-size: 0.75rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.agent-stages {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-stage {
+  padding: 10px;
+  border-left: 3px solid #4f8cff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.agent-stage-summary {
+  margin: 6px 0;
+  color: #dce9ff;
+  font-size: 0.88rem;
+  white-space: pre-line;
+}
+
+.agent-stage-output {
+  max-height: 180px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  color: #a9c9f7;
+  background: rgba(2, 8, 23, 0.45);
+  font: 0.72rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .suggestions {
   display: flex;
   flex-wrap: wrap;
