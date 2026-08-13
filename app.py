@@ -9,11 +9,6 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-try:
-    from anthropic import Anthropic
-except ImportError:  # pragma: no cover - defensive fallback
-    Anthropic = None
-
 PARSE_BOT_URL = (
     "https://api.parse.bot/scraper/9a5779d1-6006-4cff-8af0-2f31ec742428/search_products"
 )
@@ -391,18 +386,6 @@ async def verify_price(payload: PriceRequest):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch market prices: {exc}") from exc
 
-    # Build a readable summary of scraped results for the prompt / demo response
-    if market_products:
-        lines = []
-        for p in market_products[:5]:
-            name = p.get("title") or p.get("name", "Unknown")
-            price = p.get("price") or p.get("current_price", "N/A")
-            store = p.get("store") or p.get("retailer", "")
-            lines.append(f"- {name}: {price}" + (f" ({store})" if store else ""))
-        market_summary = "\n".join(lines)
-    else:
-        market_summary = "No market listings found."
-
     verdict_data = build_verdict_data(payload.product, payload.customer_price, market_products)
     disambiguation = build_disambiguation(
         payload.product, payload.customer_price, market_products, payload.selected_listing_index
@@ -413,41 +396,10 @@ async def verify_price(payload: PriceRequest):
             "Tier was picked by category price range, not by exact brand/model match.",
         ]
 
-    if not os.getenv("ANTHROPIC_API_KEY") or Anthropic is None:
-        reply = build_local_verdict(payload.product, payload.customer_price, market_products)
-        return {
-            "reply": reply,
-            "mode": "demo",
-            "market_products": market_products,
-            **verdict_data,
-            "disambiguation": disambiguation,
-        }
-
-    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    prompt = (
-        f"The customer is asking about '{payload.product}' and says they saw it priced at {payload.customer_price}. "
-        f"Here are the current market listings we fetched (zip code {payload.zipcode}):\n{market_summary}\n\n"
-        "Based on this data, give a concise, customer-friendly verdict: is the customer's price competitive, "
-        "above market, or below market? Include the price range found and a brief recommendation."
-    )
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=300,
-            system=(
-                "You are a helpful retail pricing assistant. You receive live product listings and a customer-provided price. "
-                "Give a brief, friendly verdict on whether the customer's price is competitive. Be specific about numbers."
-            ),
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Anthropic request failed: {exc}") from exc
-
+    reply = build_local_verdict(payload.product, payload.customer_price, market_products)
     return {
-        "reply": text,
-        "mode": "anthropic",
+        "reply": reply,
+        "mode": "local",
         "market_products": market_products,
         **verdict_data,
         "disambiguation": disambiguation,
