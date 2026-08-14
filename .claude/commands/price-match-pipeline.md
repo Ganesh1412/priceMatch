@@ -1,9 +1,9 @@
 ---
-description: Run the full Researcher → Solution Designer → Prototyper → Communicator pipeline for a customer price-match request.
+description: Run the full Researcher → Solution Designer → Prototyper → Communicator → Manager pipeline for a customer price-match request.
 argument-hint: [product] [customer_price] [zipcode]
 ---
 
-Run the four-stage Price Match Assistant pipeline end to end for:
+Run the five-stage Price Match Assistant pipeline end to end for:
 
 - Product: $1
 - Customer price: $2
@@ -33,8 +33,13 @@ Capture the full output using the communicator's output format.
 
 If the prototyper did not produce a working slice or its verification is missing, the communicator may still create a provisional narrative, but it must label claims as assumptions and state what must be validated before launch.
 
+## Stage 5 — Manager
+Invoke the `manager` subagent after the communicator completes. Pass it the full, unabridged outputs from Stages 1 through 4, plus any available repository state or test evidence.
+Ask it to review strategic alignment across research, design, implementation, and messaging; make an explicit readiness decision; identify conflicts and material risks; and produce an executive summary with a prioritized operational plan. It must distinguish shipped and verified behavior from deferred work, assumptions, and unmeasured outcomes.
+Capture the full output using the manager's output format. Do not let the manager override evidence with a launch recommendation: it may recommend only proceed, proceed with conditions, hold for validation, or stop and re-scope.
+
 ## Final report
-After all four stages complete, report back with:
+After all five stages complete, report back with:
 
 1. A one-paragraph summary of the customer scenario and the verdict reached.
 2. The recommended concept name and why it was chosen.
@@ -42,5 +47,6 @@ After all four stages complete, report back with:
 4. Any stage that had to make an assumption due to missing data, listed explicitly.
 5. What remains out of scope / deferred, per the prototyper's MVP coverage section.
 6. The communicator's core positioning idea, strongest launch message, campaign recommendation, and evidence gaps.
+7. The manager's readiness decision, top risks, accountable next actions, and decision gate.
 
 Do not mark a stage complete unless its subagent actually returned output. Do not commit or push changes unless explicitly asked.
