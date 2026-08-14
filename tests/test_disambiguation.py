@@ -1,4 +1,4 @@
-from app import build_disambiguation, relevant_market_products
+from app import build_disambiguation, build_local_verdict, relevant_market_products
 
 AIRPODS_LISTINGS = [
     {"title": "Apple AirPods Max 2 - Midnight", "brand": "Apple", "price": "$449.99"},
@@ -15,6 +15,24 @@ IRRELEVANT_LISTINGS = [
 def test_relevant_market_products_filters_unrelated_listings():
     result = relevant_market_products("airpods", AIRPODS_LISTINGS + IRRELEVANT_LISTINGS)
     assert result == AIRPODS_LISTINGS
+
+
+def test_local_verdict_explains_market_evidence_and_limitations():
+    result = build_local_verdict("airpods", "150", AIRPODS_LISTINGS)
+
+    assert "appears below market" in result
+    assert "3 available market listing(s)" in result
+    assert "range from $99.99 to $449.99" in result
+    assert "$50.01 higher" in result
+    assert "not an automatic price-match approval" in result
+
+
+def test_local_verdict_explains_when_a_comparison_cannot_be_made():
+    result = build_local_verdict("airpods", "not a price", AIRPODS_LISTINGS)
+
+    assert "could not complete a reliable price comparison" in result
+    assert "exact product name or model" in result
+    assert "exact product match" in result
 
 
 def test_inconclusive_when_no_relevant_listings():

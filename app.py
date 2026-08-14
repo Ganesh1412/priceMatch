@@ -31,8 +31,12 @@ def build_local_verdict(product: str, customer_price: str, market_products: list
     customer_value = parse_price(customer_price)
     if not market_prices or customer_value is None:
         return (
-            f"Market data for '{product}' is available, but I could not compare the prices reliably.\n"
-            f"Customer price provided: {customer_price}."
+            f"I could not complete a reliable price comparison for '{product}'.\n\n"
+            f"You entered: {customer_price}. I need both a readable customer price and at least one usable "
+            "market listing to calculate a comparison. Please check the price format and try again with the "
+            "exact product name or model.\n\n"
+            "Note: market listings can differ by model, condition, seller, shipping, tax, or promotions, "
+            "so an exact product match should always be confirmed before making a final price-match decision."
         )
 
     low, high = min(market_prices), max(market_prices)
@@ -44,10 +48,23 @@ def build_local_verdict(product: str, customer_price: str, market_products: list
         verdict = "above market"
     else:
         verdict = "competitive"
+    difference_from_average = customer_value - average
+    direction = "below" if difference_from_average < 0 else "above"
+    if difference_from_average == 0:
+        comparison_detail = "exactly in line with"
+    else:
+        comparison_detail = f"${abs(difference_from_average):.2f} {direction}"
     return (
-        f"Local price check for '{product}': the customer price is {verdict}.\n"
-        f"Market range: ${low:.2f}-$" f"{high:.2f} (average ${average:.2f}).\n"
-        f"Customer price: ${customer_value:.2f}."
+        f"Price check for '{product}': your price of ${customer_value:.2f} appears {verdict}.\n\n"
+        f"I compared it with {len(market_prices)} available market listing(s). Their prices range from "
+        f"${low:.2f} to ${high:.2f}, with an average of ${average:.2f}. Your price is "
+        f"{comparison_detail} the average, or {abs(pct_from_average) * 100:.1f}% "
+        f"{'lower' if pct_from_average < 0 else 'higher' if pct_from_average > 0 else 'the same'}.\n\n"
+        f"The lowest observed listing is ${low:.2f}. Compared with that listing, your price is "
+        f"${abs(customer_value - low):.2f} {'higher' if customer_value >= low else 'lower'}.\n\n"
+        "This is a market comparison, not an automatic price-match approval. Listings are keyword matches, "
+        "and shipping, tax, promotions, condition, and exact model may differ. Confirm the exact product "
+        "and final seller terms before making a final decision."
     )
 
 
