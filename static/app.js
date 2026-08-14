@@ -177,11 +177,7 @@ function renderAgentStage(stage) {
   summary.className = 'agent-stage-summary';
   summary.textContent = stage.summary || 'No summary returned.';
 
-  const output = document.createElement('pre');
-  output.className = 'agent-stage-output';
-  output.textContent = JSON.stringify(stage, null, 2);
-
-  card.append(header, summary, output);
+  card.append(header, summary);
   agentStages.appendChild(card);
   chat.scrollTop = chat.scrollHeight;
 }
