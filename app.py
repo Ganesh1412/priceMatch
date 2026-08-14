@@ -409,6 +409,199 @@ def build_prototyper_output(payload: PriceRequest, designer_output: dict, market
     }
 
 
+def build_communicator_output(
+    payload: PriceRequest, designer_output: dict, disambiguation: dict
+) -> dict:
+    """Translate the verified result into evidence-bound customer messaging."""
+    verdict = designer_output["verdict"]
+    limitations = [
+        "Market listings are keyword matches and are not confirmed identical products.",
+        "A human should make the final price-match decision.",
+    ]
+    if disambiguation.get("status") != "confirmed":
+        limitations.insert(0, disambiguation["verdict_text"])
+    return {
+        "agent": "communicator",
+        "title": "Evidence Communicator",
+        "summary": f"{verdict['label']}: {verdict['explanation']}",
+        "input": designer_output,
+        "message": verdict["explanation"],
+        "limitations": limitations,
+    }
+
+
+def build_manager_output(
+    payload: PriceRequest, designer_output: dict, disambiguation: dict
+) -> dict:
+    """Provide the final operating recommendation without automating approval."""
+    confirmed = disambiguation.get("status") == "confirmed"
+    verdict = designer_output.get("verdict", {})
+    comparison = designer_output.get("comparison", {})
+    confidence = designer_output.get("confidence", {})
+    status = disambiguation.get("status", "unknown")
+
+    if confirmed:
+        decision = "proceed_with_conditions"
+        decision_label = "proceed with conditions"
+        summary = (
+            "Proceed with conditions: the match is confirmed enough for human review, "
+            "but the exact product and customer context still need a final operator check."
+        )
+        why_now = (
+            "The current evidence identifies a single relevant comparable listing that is close enough "
+            "to the customer price to merit a human review decision."
+        )
+        value_created = (
+            "This reduces the search space for a human reviewer and turns raw market listings into an "
+            "explainable price comparison."
+        )
+        evidence_basis = (
+            "A single matched listing was identified, the customer price was compared against the market "
+            "range and average, and the confidence level was explicit about the remaining ambiguity."
+        )
+        critical_condition = "No automated approval: a human must confirm the exact product match before any final price decision."
+        pilot_readiness = "Ready for a limited human-review pilot if the exact-match workflow is documented and staffed."
+        launch_readiness = "Not ready for broad launch without operator training and a product-match confirmation step."
+    else:
+        decision = "hold_for_validation"
+        decision_label = "hold for validation"
+        summary = (
+            "Hold the price-match decision until the product or tier is confirmed. The current market "
+            "evidence is not specific enough for a trustworthy approval step."
+        )
+        why_now = (
+            "The product match is ambiguous or the evidence set is too weak to support a defensible price "
+            "comparison without additional confirmation."
+        )
+        value_created = (
+            "The prototype still provides a clear decision boundary: it stops when evidence is weak and "
+            "prevents overconfident automation."
+        )
+        evidence_basis = (
+            "The current output shows an ambiguous or insufficient match, which means the customer price cannot "
+            "be responsibly compared to a single product listing."
+        )
+        critical_condition = "The workflow must wait for an exact product match or a human-selected listing before it can be trusted."
+        pilot_readiness = "Not yet ready for pilot use in a decision-support role without a confirmed matching step."
+        launch_readiness = "Not ready for launch; the app should remain in validation until the matching quality is materially improved."
+
+    operational_plan = [
+        {
+            "priority": 1,
+            "action": "Confirm the exact product match workflow before any customer-facing price decision.",
+            "owner_role": "Product + operator lead",
+            "dependency": "Research and disambiguation results",
+            "completion_signal": "One explicit product-match confirmation flow is documented and tested for the top failure modes.",
+            "intended_decision": "Proceed or hold based on the confirmed match quality.",
+        },
+        {
+            "priority": 2,
+            "action": "Tighten the trust model by surfacing market-range, source quality, and uncertainty in every result.",
+            "owner_role": "Engineering",
+            "dependency": "Verified listing data and UI contract",
+            "completion_signal": "The result screen shows evidence, confidence, and limitations for every verdict without hiding ambiguity.",
+            "intended_decision": "Improve confidence before pilot scaling.",
+        },
+        {
+            "priority": 3,
+            "action": "Run a small pilot with human review on a limited set of product searches and track result quality.",
+            "owner_role": "Customer operations",
+            "dependency": "Confirmed product-match workflow",
+            "completion_signal": "Pilot logs show operator override rate and false-positive/false-negative review outcomes for a defined sample.",
+            "intended_decision": "Validate whether the tool materially reduces decision time without raising trust risk.",
+        },
+    ]
+
+    return {
+        "agent": "manager",
+        "title": "Manager Oversight",
+        "summary": summary,
+        "input": designer_output,
+        "decision": decision,
+        "human_review_required": True,
+        "reason": disambiguation.get("verdict_text", "No verified match was established."),
+        "executive_summary": {
+            "Decision": decision_label,
+            "Why now": why_now,
+            "Value created": value_created,
+            "Evidence basis": evidence_basis,
+            "Critical condition or constraint": critical_condition,
+        },
+        "alignment_review": {
+            "Customer problem and target user": (
+                "The intended user is a customer or operator who needs a quick, evidence-based answer on whether a price is competitive or requires a human decision."
+            ),
+            "Research-to-design fit": (
+                "The research is clear enough to support a comparison flow, but it only supports human review when the product match is not exact."
+            ),
+            "Design-to-build fit": (
+                "The prototype implements a defensible comparison and disambiguation flow that reflects the evidence rather than overclaiming certainty."
+            ),
+            "Build-to-message fit": (
+                "The app's messaging should emphasize evidence and human review, not automated approval or guaranteed savings."
+            ),
+            "Contradictions or gaps": (
+                "The core risk is that a generic product name can still produce weak or ambiguous matches; the message must not imply exact product identity when only a keyword match is available."
+            ),
+        },
+        "delivery_and_readiness": {
+            "Shipped and verified": (
+                "The app can fetch listings, normalize prices, compare them to the customer price, and surface disambiguation or ambiguity states."
+            ),
+            "Deferred or unverified": (
+                "The product does not yet support broad trust claims, retailer integrations, or autonomous pricing decisions."
+            ),
+            "Pilot readiness": pilot_readiness,
+            "Launch readiness": launch_readiness,
+            "Human decisions required": (
+                "A human must confirm the exact product and approve any final price-match recommendation when there is not a single high-confidence comparable listing."
+            ),
+        },
+        "risks_and_safeguards": {
+            "Highest-priority risks": [
+                "Keyword match ambiguity can produce false confidence when the product is not uniquely identified.",
+                "Price normalization may hide shipping, taxes, or promotions that change the true comparable value.",
+                "Any launch message that implies automation or guaranteed savings would overstate the product's evidence."
+            ],
+            "Trust and compliance safeguards": [
+                "Keep the default posture as human decision support rather than automated approval.",
+                "Demonstrate the evidence, not just the verdict, and expose match quality in the UI and messages.",
+                "Treat product match uncertainty as a blocking condition for any broader launch claim."
+            ],
+            "Escalation triggers": [
+                "A product match remains ambiguous after the user selects a candidate listing.",
+                "The market data source becomes stale, incomplete, or inconsistent across listings.",
+                "The customer price falls outside the supported market comparison range or the product is not a standard retail item."
+            ],
+        },
+        "operational_plan": operational_plan,
+        "measurement_and_cadence": {
+            "Core metrics": [
+                "rate of confirmed product matches",
+                "human override rate",
+                "share of searches with incomplete or ambiguous evidence",
+                "average time to operator decision"
+            ],
+            "Review cadence": "Weekly review of match quality, operator overrides, and data quality flags during pilot validation.",
+            "Decision gates": [
+                "Only proceed to a wider pilot when the exact-match flow is stable and ambiguity is below an agreed threshold.",
+                "Hold the launch if the error rate or evidence gaps increase relative to the pilot baseline."
+            ],
+        },
+        "leadership_recommendation": {
+            "Recommended next move": (
+                "Run a small human-review pilot with the confirmed-match path and track the rate of ambiguity, override, and acceptability before scaling."
+            ),
+            "Smallest validating experiment": (
+                "Test a handful of searches across common product names, then review whether operators can reliably confirm the exact match and price comparison from the current evidence."
+            ),
+            "What would change this recommendation": (
+                "This recommendation changes only if product matching becomes consistently exact, the quality of listings improves materially, and a defined operator process proves the solution reduces decision time without trust erosion."
+            ),
+        },
+    }
+
+
 @app.get("/", response_class=FileResponse)
 async def index():
     return FileResponse("templates/index.html")
@@ -488,6 +681,10 @@ async def pipeline_events(payload: PriceRequest):
 
     prototyper_output = build_prototyper_output(payload, designer_output, market_products)
     yield {"type": "agent", "stage": prototyper_output}
+    communicator_output = build_communicator_output(payload, designer_output, disambiguation)
+    yield {"type": "agent", "stage": communicator_output}
+    manager_output = build_manager_output(payload, designer_output, disambiguation)
+    yield {"type": "agent", "stage": manager_output}
     yield {
         "type": "complete",
         "result": {

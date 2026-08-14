@@ -45,3 +45,35 @@ def test_confirmed_via_selected_listing_index():
 def test_selected_listing_index_out_of_range_falls_back_to_ambiguous():
     result = build_disambiguation("airpods", "145", AIRPODS_LISTINGS, 99)
     assert result["status"] == "ambiguous"
+
+
+def test_manager_recommends_human_review_for_confirmed_match():
+    from app import build_manager_output
+
+    designer_output = {
+        "verdict": {"label": "Below market", "explanation": "Customer price is below the market average."},
+        "comparison": {"customerPrice": 150.0, "marketAverage": 180.0},
+        "confidence": {"level": "moderate"},
+    }
+    disambiguation = {"status": "confirmed", "verdict_text": "Your price matches the Apple AirPods Pro 3 listing."}
+
+    result = build_manager_output(None, designer_output, disambiguation)
+    assert result["decision"] == "proceed_with_conditions"
+    assert result["human_review_required"] is True
+    assert result["executive_summary"]["Decision"] == "proceed with conditions"
+
+
+def test_manager_holds_when_match_is_not_confirmed():
+    from app import build_manager_output
+
+    designer_output = {
+        "verdict": {"label": "Not enough evidence", "explanation": "We found fewer than two comparable listings."},
+        "comparison": {"customerPrice": 150.0, "marketAverage": None},
+        "confidence": {"level": "low"},
+    }
+    disambiguation = {"status": "ambiguous", "verdict_text": "We found multiple possible listings for the product."}
+
+    result = build_manager_output(None, designer_output, disambiguation)
+    assert result["decision"] == "hold_for_validation"
+    assert result["leadership_recommendation"]["Recommended next move"]
+    assert "operational_plan" in result

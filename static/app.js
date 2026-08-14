@@ -4,7 +4,9 @@ const suggestions = document.querySelectorAll('.suggestion');
 const promptInput = document.getElementById('prompt');
 const productInput = document.getElementById('product');
 const priceInput = document.getElementById('customer-price');
-const API_BASE_URL = 'https://pricematch-i4ccvq.fly.dev';
+const API_BASE_URL = window.location.hostname.endsWith('github.io')
+  ? 'https://pricematch-i4ccvq.fly.dev'
+  : '';
 
 const verdictPanel = document.getElementById('verdict-panel');
 const verdictBadge = document.getElementById('verdict-badge');
