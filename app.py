@@ -37,9 +37,10 @@ def build_local_verdict(product: str, customer_price: str, market_products: list
 
     low, high = min(market_prices), max(market_prices)
     average = sum(market_prices) / len(market_prices)
-    if customer_value < low:
+    pct_from_average = (customer_value - average) / average if average else 0
+    if pct_from_average < -0.10:
         verdict = "below market"
-    elif customer_value > high:
+    elif pct_from_average > 0.10:
         verdict = "above market"
     else:
         verdict = "competitive"

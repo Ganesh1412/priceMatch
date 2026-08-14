@@ -1,5 +1,5 @@
 ---
-description: Run the full Researcher → Solution Designer → Prototyper pipeline for a customer price-match request.
+description: Run the full Researcher → Solution Designer → Prototyper → Communicator pipeline for a customer price-match request.
 argument-hint: [product] [customer_price] [zipcode]
 ---
 
@@ -26,13 +26,21 @@ Invoke the `prototyper` subagent, passing it the Stage 2 "Recommended Solution",
 Instruct it to build the smallest working slice into the existing app (`app.py`, `templates/index.html`, `static/app.js`, `static/styles.css`), reusing the existing `/api/verify-price` contract rather than inventing a new one.
 Capture its full output: slice built, files changed, verification performed, and MVP coverage/deferred items.
 
+## Stage 4 — Communicator
+Invoke the `communicator` subagent after the prototyper completes, passing it the full verified outputs from Stages 1 through 3. Include the research evidence and limitations, the recommended solution and target user, and the prototyper's actual files changed, verification, MVP coverage, deferred items, and assumptions.
+Ask it to produce an evidence-grounded messaging system, marketing materials, campaign concepts, and a practical go-to-market strategy. It must distinguish shipped capabilities from future ideas and must not invent customer outcomes, testimonials, market data, or performance claims.
+Capture the full output using the communicator's output format.
+
+If the prototyper did not produce a working slice or its verification is missing, the communicator may still create a provisional narrative, but it must label claims as assumptions and state what must be validated before launch.
+
 ## Final report
-After all three stages complete, report back with:
+After all four stages complete, report back with:
 
 1. A one-paragraph summary of the customer scenario and the verdict reached.
 2. The recommended concept name and why it was chosen.
 3. The files the prototyper actually changed (verified via `git status`, not just claimed).
 4. Any stage that had to make an assumption due to missing data, listed explicitly.
 5. What remains out of scope / deferred, per the prototyper's MVP coverage section.
+6. The communicator's core positioning idea, strongest launch message, campaign recommendation, and evidence gaps.
 
 Do not mark a stage complete unless its subagent actually returned output. Do not commit or push changes unless explicitly asked.
