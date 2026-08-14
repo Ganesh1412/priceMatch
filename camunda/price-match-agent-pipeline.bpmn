@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_PriceMatch" targetNamespace="https://github.com/Ganesh1412/priceMatch">
+  <bpmn:process id="price-match-agent-pipeline" name="Price Match Agent Pipeline" isExecutable="true">
+    <bpmn:documentation>
+      Required start variables: product, customer_price, zipcode. Agent workers persist their output as researcher_output, designer_output, prototyper_output, communicator_output, and manager_output.
+    </bpmn:documentation>
+    <bpmn:startEvent id="start_price_check" name="Price check requested">
+      <bpmn:outgoing>flow_start_to_researcher</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="researcher" name="Research market listings">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="price-match.researcher" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= {product: product, customer_price: customer_price, zipcode: zipcode}" target="research_request" />
+          <zeebe:output source="= research_result" target="researcher_output" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_start_to_researcher</bpmn:incoming>
+      <bpmn:outgoing>flow_researcher_to_designer</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="solution_designer" name="Design evidence-based decision">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="price-match.solution-designer" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= researcher_output" target="researcher_output" />
+          <zeebe:output source="= designer_result" target="designer_output" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_researcher_to_designer</bpmn:incoming>
+      <bpmn:outgoing>flow_designer_to_prototyper</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="prototyper" name="Create customer response">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="price-match.prototyper" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= {request: research_request, researcher_output: researcher_output, designer_output: designer_output}" target="prototyper_request" />
+          <zeebe:output source="= prototyper_result" target="prototyper_output" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_designer_to_prototyper</bpmn:incoming>
+      <bpmn:outgoing>flow_prototyper_to_communicator</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="communicator" name="Explain evidence and limitations">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="price-match.communicator" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= {researcher_output: researcher_output, designer_output: designer_output, prototyper_output: prototyper_output}" target="communicator_request" />
+          <zeebe:output source="= communicator_result" target="communicator_output" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_prototyper_to_communicator</bpmn:incoming>
+      <bpmn:outgoing>flow_communicator_to_manager</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="manager" name="Assess readiness and safeguards">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="price-match.manager" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= {researcher_output: researcher_output, designer_output: designer_output, prototyper_output: prototyper_output, communicator_output: communicator_output}" target="manager_request" />
+          <zeebe:output source="= manager_result" target="manager_output" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_communicator_to_manager</bpmn:incoming>
+      <bpmn:outgoing>flow_manager_to_review_gate</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="review_gate" name="Confirmed match and review required?" default="flow_hold_for_validation">
+      <bpmn:incoming>flow_manager_to_review_gate</bpmn:incoming>
+      <bpmn:outgoing>flow_confirmed_to_human_review</bpmn:outgoing>
+      <bpmn:outgoing>flow_hold_for_validation</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="human_review" name="Human confirms final price-match decision">
+      <bpmn:documentation>A human must review the exact product match and seller terms before a price-match decision is finalized.</bpmn:documentation>
+      <bpmn:incoming>flow_confirmed_to_human_review</bpmn:incoming>
+      <bpmn:outgoing>flow_review_to_complete</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="completed_with_review" name="Decision reviewed">
+      <bpmn:incoming>flow_review_to_complete</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="held_for_validation" name="Held for validation">
+      <bpmn:incoming>flow_hold_for_validation</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="flow_start_to_researcher" sourceRef="start_price_check" targetRef="researcher" />
+    <bpmn:sequenceFlow id="flow_researcher_to_designer" sourceRef="researcher" targetRef="solution_designer" />
+    <bpmn:sequenceFlow id="flow_designer_to_prototyper" sourceRef="solution_designer" targetRef="prototyper" />
+    <bpmn:sequenceFlow id="flow_prototyper_to_communicator" sourceRef="prototyper" targetRef="communicator" />
+    <bpmn:sequenceFlow id="flow_communicator_to_manager" sourceRef="communicator" targetRef="manager" />
+    <bpmn:sequenceFlow id="flow_manager_to_review_gate" sourceRef="manager" targetRef="review_gate" />
+    <bpmn:sequenceFlow id="flow_confirmed_to_human_review" name="confirmed" sourceRef="review_gate" targetRef="human_review">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">= manager_output.decision = "proceed_with_conditions" and designer_output.disambiguation.status = "confirmed"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_hold_for_validation" name="hold for validation" sourceRef="review_gate" targetRef="held_for_validation" />
+    <bpmn:sequenceFlow id="flow_review_to_complete" sourceRef="human_review" targetRef="completed_with_review" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_PriceMatch">
+    <bpmndi:BPMNPlane id="BPMNPlane_PriceMatch" bpmnElement="price-match-agent-pipeline">
+      <bpmndi:BPMNShape id="Shape_start_price_check" bpmnElement="start_price_check">
+        <dc:Bounds x="120" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_researcher" bpmnElement="researcher">
+        <dc:Bounds x="210" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_solution_designer" bpmnElement="solution_designer">
+        <dc:Bounds x="410" y="160" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_prototyper" bpmnElement="prototyper">
+        <dc:Bounds x="630" y="160" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_communicator" bpmnElement="communicator">
+        <dc:Bounds x="830" y="160" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_manager" bpmnElement="manager">
+        <dc:Bounds x="1050" y="160" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_review_gate" bpmnElement="review_gate" isMarkerVisible="true">
+        <dc:Bounds x="1270" y="175" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_human_review" bpmnElement="human_review">
+        <dc:Bounds x="1380" y="60" width="210" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_completed_with_review" bpmnElement="completed_with_review">
+        <dc:Bounds x="1650" y="82" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_held_for_validation" bpmnElement="held_for_validation">
+        <dc:Bounds x="1395" y="302" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_flow_start_to_researcher" bpmnElement="flow_start_to_researcher">
+        <di:waypoint x="156" y="200" />
+        <di:waypoint x="210" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_researcher_to_designer" bpmnElement="flow_researcher_to_designer">
+        <di:waypoint x="360" y="200" />
+        <di:waypoint x="410" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_designer_to_prototyper" bpmnElement="flow_designer_to_prototyper">
+        <di:waypoint x="580" y="200" />
+        <di:waypoint x="630" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_prototyper_to_communicator" bpmnElement="flow_prototyper_to_communicator">
+        <di:waypoint x="780" y="200" />
+        <di:waypoint x="830" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_communicator_to_manager" bpmnElement="flow_communicator_to_manager">
+        <di:waypoint x="1000" y="200" />
+        <di:waypoint x="1050" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_manager_to_review_gate" bpmnElement="flow_manager_to_review_gate">
+        <di:waypoint x="1220" y="200" />
+        <di:waypoint x="1270" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_confirmed_to_human_review" bpmnElement="flow_confirmed_to_human_review">
+        <di:waypoint x="1295" y="175" />
+        <di:waypoint x="1295" y="100" />
+        <di:waypoint x="1380" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1302" y="105" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_hold_for_validation" bpmnElement="flow_hold_for_validation">
+        <di:waypoint x="1295" y="225" />
+        <di:waypoint x="1295" y="320" />
+        <di:waypoint x="1395" y="320" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1302" y="255" width="100" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_flow_review_to_complete" bpmnElement="flow_review_to_complete">
+        <di:waypoint x="1590" y="100" />
+        <di:waypoint x="1650" y="100" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
