@@ -3,7 +3,7 @@ description: Run the full Researcher → Solution Designer → Prototyper → Co
 argument-hint: [product] [customer_price] [zipcode]
 ---
 
-Run the three-stage Price Match Assistant pipeline end to end for:
+Run the four-stage Price Match Assistant pipeline end to end for:
 
 - Product: $1
 - Customer price: $2
