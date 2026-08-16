@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 PARSE_BOT_URL = (
-    "https://api.parse.bot/scraper/9a5779d1-6006-4cff-8af0-2f31ec742428/search_products"
+    "https://api.parse.bot/scraper/9935e57e-18c2-4c7c-aebe-bc311e983dc8/search_products"
 )
 PARSE_BOT_API_KEY = os.getenv("PARSE_BOT_API_KEY")
 
